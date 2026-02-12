@@ -13,6 +13,14 @@ interface DispatchState {
 
 // 2. 玩家总存档
 interface UserData {
+    // === [Phase 4 新增：玩家身份信息] ===
+    playerInfo: {
+        playerId: string;
+        nickName: string;
+        isGuest: boolean;
+    } | null;
+    hasFinishedTutorial: boolean; // 是否已完成新手引导(首抽)
+
     // === [Phase 1 & 2 旧数据 - 必须保留] ===
     vitality: number;        // (兼容旧代码)
     ownedElves: string[];    // 已拥有的灵兽ID (抽卡系统核心)
@@ -46,9 +54,14 @@ export class DataManager {
 
     // 初始化默认数据
     private _data: UserData = {
+        // === [Phase 4 新增初始化] ===
+        playerInfo: null,
+        hasFinishedTutorial: false,
+
         // 旧数据默认值
         vitality: 0,
-        ownedElves: [],
+        // 【修改】默认为空，通过新手引导发放，确保新号体验
+        ownedElves: [], 
         dispatchCount: 0,
         lastLoginDate: "",
         
@@ -62,11 +75,8 @@ export class DataManager {
             endTime: 0
         },
         unlockedItems: [],
-        // 【新增】默认给一只初始灵兽 (假设叫 Elf_001)
-        currentElfId: "Elf_SSR_jq",
-        
-        // 确保你的 ownedElves 里至少有一只初始的，防止报错
-        ownedElves: ["Elf_SSR_jq"]
+        // 【修改】默认为空，新手引导后设置
+        currentElfId: "", 
     };
 
     // 建议使用新的Key，或者保留旧Key (如果想继承之前的测试数据就用旧的)
@@ -97,11 +107,50 @@ export class DataManager {
                 if (!this._data.unlockedItems) {
                     this._data.unlockedItems = [];
                 }
+                // 【新增容错】如果playerInfo字段丢失
+                if (this._data.playerInfo === undefined) {
+                    this._data.playerInfo = null;
+                }
 
             } catch (e) {
                 console.error("存档读取失败，使用默认值");
             }
         }
+    }
+
+    // ==========================================
+    // Phase 4: 玩家身份与新手引导 (新增方法)
+    // ==========================================
+    
+    // 保存玩家信息
+    public setPlayerInfo(id: string, name: string) {
+        this._data.playerInfo = {
+            playerId: id,
+            nickName: name,
+            isGuest: false
+        };
+        this.save();
+    }
+
+    public getPlayerInfo() {
+        return this._data.playerInfo;
+    }
+
+    // 检查是否是新玩家 (需要跑新手引导)
+    public isNewPlayer(): boolean {
+        return !this._data.hasFinishedTutorial;
+    }
+
+    // 标记新手引导完成
+    public finishTutorial() {
+        this._data.hasFinishedTutorial = true;
+        this.save();
+    }
+
+    // 重置账号 (调试用，方便反复测试新手流程)
+    public resetAccount() {
+        sys.localStorage.removeItem(this.STORAGE_KEY);
+        console.log("⚠️ 账号已重置，请重新运行游戏");
     }
 
     // ==========================================

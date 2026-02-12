@@ -32,21 +32,86 @@ export class MainUIController extends Component {
     @property(Prefab)
     handbookPrefab: Prefab = null!;
 
+    // === [Phase 4 新增：显示玩家昵称] ===
+    @property(Label)
+    playerNameLabel: Label = null!;
+
+
+    // 【新增】系统广播框预制体
+    @property(Prefab)
+    systemLogPrefab: Prefab = null!;
+
     start() {
+        // 1. 【核心】最先加载日志框，这样后续的 Log 才能被捕获
+        this.initSystemLog();
+        
         // 每0.5秒刷新一次界面
         this.schedule(this.refreshUI, 0.5);
         this.refreshUI();
 
-        // 1. 初始化显示当前灵兽
-        this.updateElfImage();
-
-        // 2. 监听“换人”事件 (当手账里点击装备时触发)
+        // 1. 监听“换人”事件 (当手账里点击装备时触发)
         director.on(EVENT_ELF_CHANGED, this.updateElfImage, this);
+
+        // 2. 【核心修改】检查登录状态与新手引导
+        // 注意：这里把原来的 updateElfImage 调用移到了 checkLoginStatus 内部
+        this.checkLoginStatus();
     }
 
     onDestroy() {
         // 记得移除监听，养成好习惯
         director.off(EVENT_ELF_CHANGED, this.updateElfImage, this);
+    }
+
+    // ==========================================
+    // Phase 4: 登录与新手引导逻辑
+    // ==========================================
+    async checkLoginStatus() {
+        let player = DataManager.instance.getPlayerInfo();
+
+        if (!player) {
+            console.log("🆕 未检测到玩家信息，开始模拟登录...");
+            // 调用服务进行登录
+            const wxInfo = await WechatService.instance.login();
+            
+            // 写入存档
+            DataManager.instance.setPlayerInfo(wxInfo.openId, wxInfo.nickName);
+            player = DataManager.instance.getPlayerInfo();
+        }
+
+        console.log(`✅ 登录成功，欢迎：${player?.nickName}`);
+
+        // 刷新界面昵称
+        if (this.playerNameLabel && player) {
+            this.playerNameLabel.string = player.nickName;
+        }
+
+        // 检查新手引导：如果是新号，发放初始灵兽
+        if (DataManager.instance.isNewPlayer()) {
+            this.giveInitialElf();
+        } else {
+            // 老玩家，直接显示当前的灵兽
+            this.updateElfImage();
+        }
+    }
+
+    // 发放初始灵兽 (新手福利)
+    giveInitialElf() {
+        // 这里设定初始送的灵兽 ID，例如庆忌 "Elf_SSR_jq"
+        const initElfId = "Elf_SSR_jq"; 
+
+        console.log("🎁 触发新手引导福利，发放初始灵兽:", initElfId);
+        
+        // 1. 数据层操作：添加并装备
+        DataManager.instance.addElf(initElfId);
+        DataManager.instance.setCurrentElfId(initElfId);
+        
+        // 2. 标记新手引导已完成 (下次就不送了)
+        DataManager.instance.finishTutorial(); 
+
+        // 3. 表现层操作：立刻刷出立绘
+        this.updateElfImage();
+
+        // TODO: 这里以后可以加一个弹窗提示 "恭喜获得伙伴：庆忌！"
     }
 
     refreshUI() {
@@ -88,7 +153,10 @@ export class MainUIController extends Component {
 
         const currentId = DataManager.instance.getCurrentElfId();
         
-        // 假设灵兽图片放在 resources/textures/elves/ 下
+        // 如果数据还没准备好(比如刚重置)，则不显示
+        if (!currentId) return;
+
+        // 假设灵兽图片放在 resources/elf_images/ 下
         // 请根据你昨天的实际路径修改！
         const path = `elf_images/${currentId}/spriteFrame`;
 
@@ -117,8 +185,6 @@ export class MainUIController extends Component {
         }
     }
 
-
-
     // 2. 【新增】底部按钮点击回调
     onOpenGalleryClicked() {
         if (this.galleryPrefab) {
@@ -126,6 +192,17 @@ export class MainUIController extends Component {
             const node = instantiate(this.galleryPrefab);
             // 挂载到当前节点 (Canvas)
             node.parent = this.node; 
+        }
+    }
+
+
+
+    // 【新增】初始化日志框
+    initSystemLog() {
+        if (this.systemLogPrefab) {
+            const node = instantiate(this.systemLogPrefab);
+            node.parent = this.node; // 挂载到 Canvas
+            node.setSiblingIndex(999); // 设为最上层 (Z-Index)，保证不被遮挡
         }
     }
 }
