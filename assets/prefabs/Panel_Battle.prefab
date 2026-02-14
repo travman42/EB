@@ -1391,6 +1391,10 @@
     "battleGuardian": {
       "__id__": 42
     },
+    "dropPopupPrefab": {
+      "__uuid__": "d8959bba-e8e4-436f-bdfb-b8889a8e9295",
+      "__expectedType__": "cc.Prefab"
+    },
     "_id": ""
   },
   {

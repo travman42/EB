@@ -3566,6 +3566,10 @@
       "__uuid__": "3717fd4d-2461-4301-a1b3-795d99c687d9",
       "__expectedType__": "cc.Prefab"
     },
+    "equipPanelPrefab": {
+      "__uuid__": "dbe595d4-ad50-4f05-b700-bbf01a8df6e7",
+      "__expectedType__": "cc.Prefab"
+    },
     "_id": "a9fDVYNnRGy6QlPx47vkSc"
   },
   {

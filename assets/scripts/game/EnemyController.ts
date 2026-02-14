@@ -11,11 +11,12 @@ export class EnemyController extends Component {
     private _currentHp: number = 100;
     private _isDead: boolean = false;
 
-    // 记录初始位置，防止抖动后位置偏移
     private _originalPos: Vec3 = new Vec3();
 
+    // 【新增】死亡回调函数，由 BattleManager 赋值
+    public onDeath: (() => void) | null = null;
+
     start() {
-        // 记住出生时的位置
         this._originalPos = this.node.position.clone();
     }
 
@@ -24,15 +25,14 @@ export class EnemyController extends Component {
         this._currentHp = hp;
         this._isDead = false;
         this.updateUI();
+        this.node.scale = new Vec3(1, 1, 1); // 重置缩放
     }
 
     public takeDamage(damage: number) {
         if (this._isDead) return;
 
         this._currentHp -= damage;
-        // console.log(`BOSS 受到伤害: ${damage}`);
-
-        // 1. 播放受击特效 (变白 + 抖动)
+        
         this.playHitColor();
         this.playShakeEffect();
 
@@ -50,40 +50,41 @@ export class EnemyController extends Component {
     }
 
     private die() {
+        if (this._isDead) return; // 防止重复死亡
         this._isDead = true;
+
+        // 播放死亡动画 (缩放消失)
         tween(this.node)
-            .to(0.2, { scale: new Vec3(0, 0, 0) })
+            .to(0.3, { scale: new Vec3(0, 0, 0) })
             .call(() => {
+                // 触发死亡回调
+                if (this.onDeath) {
+                    this.onDeath();
+                }
                 this.node.destroy();
             })
             .start();
     }
 
-    // --- 变色闪白 ---
     private playHitColor() {
         const sprite = this.node.getComponent(Sprite);
         if (sprite) {
-            const originalColor = new Color(255, 255, 255); // 假设原色是白
-            sprite.color = new Color(255, 200, 200); // 变红一点
+            const originalColor = new Color(255, 255, 255); 
+            sprite.color = new Color(255, 200, 200); 
             this.scheduleOnce(() => {
                 sprite.color = originalColor;
             }, 0.1);
         }
     }
 
-    // --- 【新增】受击抖动 ---
     private playShakeEffect() {
-        // 先停止当前可能正在播放的缓动，防止鬼畜
         tween(this.node).stop();
-
-        // 归位
         this.node.setPosition(this._originalPos);
 
-        // 左右快速晃动：左 -> 右 -> 原位
         tween(this.node)
-            .by(0.05, { position: new Vec3(-10, 0, 0) }) // 左移
-            .by(0.05, { position: new Vec3(20, 0, 0) })  // 右移
-            .by(0.05, { position: new Vec3(-10, 0, 0) }) // 回正
+            .by(0.05, { position: new Vec3(-10, 0, 0) }) 
+            .by(0.05, { position: new Vec3(20, 0, 0) })  
+            .by(0.05, { position: new Vec3(-10, 0, 0) }) 
             .start();
     }
 }

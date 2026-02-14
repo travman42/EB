@@ -3,6 +3,7 @@ import { DataManager } from '../data/DataManager';
 import { DispatchService } from '../data/DispatchService';
 // 引入弹窗控制器，以便调用 init 方法
 import { DispatchSettleController } from './DispatchSettleController';
+import { MainUIController } from './MainUIController';
 
 const { ccclass, property } = _decorator;
 
@@ -133,6 +134,21 @@ export class ElfMenuController extends Component {
         }
         
         // 关闭当前小菜单
+        this.node.destroy();
+    }
+
+    // 【新增】点击“我的装备”
+    onEquipClicked() {
+        // 1. 获取主界面控制器
+        const canvas = this.node.scene.getChildByName('Canvas');
+        const mainUI = canvas?.getComponent(MainUIController);
+        
+        if (mainUI) {
+            // 2. 调用主界面的打开装备面板方法 (稍后在 MainUI 里加)
+            mainUI.onOpenEquipPanel();
+        }
+
+        // 3. 关闭当前小菜单
         this.node.destroy();
     }
 }

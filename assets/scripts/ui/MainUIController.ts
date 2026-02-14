@@ -41,6 +41,10 @@ export class MainUIController extends Component {
     @property(Prefab)
     systemLogPrefab: Prefab = null!;
 
+    // 【新增】装备面板预制体
+    @property(Prefab)
+    equipPanelPrefab: Prefab = null!;
+
     start() {
         // 1. 【核心】最先加载日志框，这样后续的 Log 才能被捕获
         this.initSystemLog();
@@ -203,6 +207,16 @@ export class MainUIController extends Component {
             const node = instantiate(this.systemLogPrefab);
             node.parent = this.node; // 挂载到 Canvas
             node.setSiblingIndex(999); // 设为最上层 (Z-Index)，保证不被遮挡
+        }
+    }
+
+    // 【新增】打开装备面板的方法
+    public onOpenEquipPanel() {
+        if (this.equipPanelPrefab) {
+            const node = instantiate(this.equipPanelPrefab);
+            node.parent = this.node; // 挂载到 Canvas
+        } else {
+            console.warn("未绑定装备面板 Prefab！");
         }
     }
 }

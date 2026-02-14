@@ -1,48 +1,44 @@
 import { _decorator, sys } from 'cc';
 const { ccclass } = _decorator;
 
-// --- 定义数据结构 ---
-
-// 1. 派遣状态 (新功能)
+// 1. 派遣状态
 interface DispatchState {
-    isDispatching: boolean;   // 是否正在派遣
-    elfId: string;            // 派出的灵兽ID
-    targetProvinceId: number; // 目标省份
-    endTime: number;          // 归来时间戳
+    isDispatching: boolean;
+    elfId: string;
+    targetProvinceId: number;
+    endTime: number;
 }
 
 // 2. 玩家总存档
 interface UserData {
-    // === [Phase 4 新增：玩家身份信息] ===
+    // === [Phase 4 新增] ===
     playerInfo: {
         playerId: string;
         nickName: string;
         isGuest: boolean;
+        province: string;
+        city: string;
     } | null;
-    hasFinishedTutorial: boolean; // 是否已完成新手引导(首抽)
+    hasFinishedTutorial: boolean; 
 
-    // === [Phase 1 & 2 旧数据 - 必须保留] ===
-    vitality: number;        // (兼容旧代码)
-    ownedElves: string[];    // 已拥有的灵兽ID (抽卡系统核心)
-    dispatchCount: number;   // 每日派遣次数记录
-    lastLoginDate: string;   // 上次登录日期
-    
-    // === [Phase 3 新数据] ===
-    totalVitality: number;   // 玩家当前的元气总余额 (战力)
-    todaySteps: number;      // 今日已同步的步数
-    
-    // 派遣系统
+    // === [旧核心数据] ===
+    vitality: number;
+    ownedElves: string[];    
+    dispatchCount: number;
+    lastLoginDate: string;
+    totalVitality: number;
+    todaySteps: number;
     dispatchState: DispatchState;
-
-    // 图鉴系统 (存特产ID和风景ID)
     unlockedItems: string[];
-    // 【新增】当前出战/跟随的灵兽ID
     currentElfId: string; 
+
+    // === [Phase 5 新增: 装备系统] ===
+    ownedEquips: string[]; // 拥有的装备ID列表 (可重复)
+    equippedIds: [string, string, string]; // 3个装备槽 [slot1, slot2, slot3]
 }
 
 @ccclass('DataManager')
 export class DataManager {
-
     private static _instance: DataManager;
     public static get instance(): DataManager {
         if (!this._instance) {
@@ -52,35 +48,24 @@ export class DataManager {
         return this._instance;
     }
 
-    // 初始化默认数据
     private _data: UserData = {
-        // === [Phase 4 新增初始化] ===
         playerInfo: null,
         hasFinishedTutorial: false,
-
-        // 旧数据默认值
         vitality: 0,
-        // 【修改】默认为空，通过新手引导发放，确保新号体验
-        ownedElves: [], 
+        ownedElves: [],    
+        currentElfId: "",  
         dispatchCount: 0,
         lastLoginDate: "",
-        
-        // 新数据默认值
         totalVitality: 0,
         todaySteps: 0,
-        dispatchState: {
-            isDispatching: false,
-            elfId: "",
-            targetProvinceId: 0,
-            endTime: 0
-        },
+        dispatchState: { isDispatching: false, elfId: "", targetProvinceId: 0, endTime: 0 },
         unlockedItems: [],
-        // 【修改】默认为空，新手引导后设置
-        currentElfId: "", 
+        
+        // Phase 5 初始化
+        ownedEquips: [],
+        equippedIds: ["", "", ""] 
     };
 
-    // 建议使用新的Key，或者保留旧Key (如果想继承之前的测试数据就用旧的)
-    // 这里我们沿用你刚才上传文件里的 Key，保证不丢失之前的元气
     private readonly STORAGE_KEY = 'energy_battle_data_v2'; 
 
     public save() {
@@ -91,26 +76,17 @@ export class DataManager {
         const raw = sys.localStorage.getItem(this.STORAGE_KEY);
         if (raw) {
             try {
-                // 深度合并：防止新加的字段在旧存档里没有而报错
                 const savedData = JSON.parse(raw);
                 this._data = { ...this._data, ...savedData };
                 
-                // 特殊处理：如果旧存档里没有 dispatchState (因为是新加的)，手动补上
-                if (!this._data.dispatchState) {
-                    this._data.dispatchState = {
-                        isDispatching: false,
-                        elfId: "",
-                        targetProvinceId: 0,
-                        endTime: 0
-                    };
-                }
-                if (!this._data.unlockedItems) {
-                    this._data.unlockedItems = [];
-                }
-                // 【新增容错】如果playerInfo字段丢失
-                if (this._data.playerInfo === undefined) {
-                    this._data.playerInfo = null;
-                }
+                // 容错处理
+                if (!this._data.dispatchState) this._data.dispatchState = { isDispatching: false, elfId: "", targetProvinceId: 0, endTime: 0 };
+                if (!this._data.unlockedItems) this._data.unlockedItems = [];
+                if (this._data.playerInfo === undefined) this._data.playerInfo = null;
+                
+                // Phase 5 容错
+                if (!this._data.ownedEquips) this._data.ownedEquips = [];
+                if (!this._data.equippedIds) this._data.equippedIds = ["", "", ""];
 
             } catch (e) {
                 console.error("存档读取失败，使用默认值");
@@ -119,81 +95,79 @@ export class DataManager {
     }
 
     // ==========================================
-    // Phase 4: 玩家身份与新手引导 (新增方法)
+    // Phase 5: 装备系统数据操作
     // ==========================================
-    
-    // 保存玩家信息
-    public setPlayerInfo(id: string, name: string) {
+
+    // 1. 获得装备
+    public addEquip(equipId: string) {
+        this._data.ownedEquips.push(equipId);
+        this.save();
+        console.log(`[DataManager] 获得装备: ${equipId}`);
+    }
+
+    // 2. 穿戴装备 (slotIndex: 0-2)
+    public equipItem(slotIndex: number, equipId: string) {
+        if (slotIndex < 0 || slotIndex > 2) return;
+        
+        // 只有拥有的装备才能穿
+        if (this._data.ownedEquips.includes(equipId)) {
+            this._data.equippedIds[slotIndex] = equipId;
+            this.save();
+        }
+    }
+
+    // 3. 卸下装备
+    public unequipItem(slotIndex: number) {
+        if (slotIndex < 0 || slotIndex > 2) return;
+        this._data.equippedIds[slotIndex] = "";
+        this.save();
+    }
+
+    public getOwnedEquips() { return this._data.ownedEquips; }
+    public getEquippedIds() { return this._data.equippedIds; }
+
+
+    // ==========================================
+    // Phase 4: 玩家身份 (包含地域)
+    // ==========================================
+    public setPlayerInfo(id: string, name: string, province: string, city: string) {
         this._data.playerInfo = {
             playerId: id,
             nickName: name,
-            isGuest: false
+            isGuest: false,
+            province: province,
+            city: city
         };
         this.save();
     }
 
-    public getPlayerInfo() {
-        return this._data.playerInfo;
-    }
-
-    // 检查是否是新玩家 (需要跑新手引导)
-    public isNewPlayer(): boolean {
-        return !this._data.hasFinishedTutorial;
-    }
-
-    // 标记新手引导完成
+    public getPlayerInfo() { return this._data.playerInfo; }
+    public isNewPlayer(): boolean { return !this._data.hasFinishedTutorial; }
+    
     public finishTutorial() {
         this._data.hasFinishedTutorial = true;
         this.save();
     }
 
-    // 重置账号 (调试用，方便反复测试新手流程)
     public resetAccount() {
         sys.localStorage.removeItem(this.STORAGE_KEY);
-        console.log("⚠️ 账号已重置，请重新运行游戏");
+        console.log("⚠️ 账号已重置");
     }
 
     // ==========================================
-    // Phase 1 & 2 核心方法 (许愿池/手账依赖这些)
+    // Phase 1-3 核心业务 (保持不变)
     // ==========================================
-
-    // 添加灵兽 (抽卡用)
     public addElf(elfId: string) {
         if (!this._data.ownedElves.includes(elfId)) {
             this._data.ownedElves.push(elfId);
             this.save();
         }
     }
-    
-    // 获取拥有的灵兽列表 (手账用)
-    public getOwnedElves(): string[] {
-        return this._data.ownedElves;
-    }
-
-    // ==========================================
-    // Phase 3 核心方法 (元气/派遣/图鉴)
-    // ==========================================
-
-    // 1. 元气管理
-    public getTotalVitality(): number {
-        return this._data.totalVitality;
-    }
-
-    public getTodaySteps(): number {
-        return this._data.todaySteps;
-    }
-
-    public addVitality(amount: number) {
-        this._data.totalVitality += amount;
-        this.save();
-        console.log(`[DataManager] 元气增加: ${amount}, 当前余额: ${this._data.totalVitality}`);
-    }
-
-    public setTodaySteps(steps: number) {
-        this._data.todaySteps = steps;
-        this.save();
-    }
-
+    public getOwnedElves(): string[] { return this._data.ownedElves; }
+    public getTotalVitality(): number { return this._data.totalVitality; }
+    public getTodaySteps(): number { return this._data.todaySteps; }
+    public addVitality(amount: number) { this._data.totalVitality += amount; this.save(); }
+    public setTodaySteps(steps: number) { this._data.todaySteps = steps; this.save(); }
     public consumeVitality(amount: number): boolean {
         if (this._data.totalVitality >= amount) {
             this._data.totalVitality -= amount;
@@ -202,48 +176,27 @@ export class DataManager {
         }
         return false;
     }
-
-    // 2. 图鉴解锁 (特产 & 风景)
     public unlockItem(itemId: string) {
         if (!this._data.unlockedItems.includes(itemId)) {
             this._data.unlockedItems.push(itemId);
             this.save();
-            console.log(`[图鉴] 恭喜解锁新物品: ${itemId}`);
         }
     }
-
-    public isItemUnlocked(itemId: string): boolean {
-        return this._data.unlockedItems.includes(itemId);
-    }
-
-    // 3. 派遣状态读写
-    public getDispatchState(): DispatchState {
-        return this._data.dispatchState;
-    }
-    
+    public isItemUnlocked(itemId: string): boolean { return this._data.unlockedItems.includes(itemId); }
+    public getDispatchState(): DispatchState { return this._data.dispatchState; }
     public startDispatch(elfId: string, provinceId: number, durationSec: number) {
         this._data.dispatchState.isDispatching = true;
         this._data.dispatchState.elfId = elfId;
         this._data.dispatchState.targetProvinceId = provinceId;
-        // 结束时间 = 当前时间 + 持续秒数 * 1000
         this._data.dispatchState.endTime = Date.now() + (durationSec * 1000);
         this.save();
     }
-
     public endDispatch() {
         this._data.dispatchState.isDispatching = false;
-        // 不清空 elfId 和 targetProvinceId 也可以，保留作为"上次派遣"的记录
         this.save();
     }
-
-    // --- 【新增】获取/设置当前灵兽 ---
-    
-    public getCurrentElfId(): string {
-        return this._data.currentElfId;
-    }
-
+    public getCurrentElfId(): string { return this._data.currentElfId; }
     public setCurrentElfId(id: string) {
-        // 安全检查：必须是已拥有的才能装备
         if (this._data.ownedElves.includes(id)) {
             this._data.currentElfId = id;
             this.save();
